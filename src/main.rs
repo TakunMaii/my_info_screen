@@ -278,7 +278,7 @@ fn draw_tasks(
     );
     drawing.draw_text_ex(
         heading_font,
-        "UPCOMING TASKS",
+        "TASKS",
         Vector2::new(panel_x, panel_top + 4.0),
         heading_size,
         0.0,
@@ -318,7 +318,7 @@ fn draw_tasks(
         drawing.draw_text_ex(
             task_font,
             &schedule_text,
-            Vector2::new(panel_x + panel_width - schedule_width, y + title_size + 3.0),
+            Vector2::new(panel_x + panel_width - schedule_width, y),
             schedule_size,
             0.0,
             Color::new(190, 205, 214, 230),
