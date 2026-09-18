@@ -12,7 +12,7 @@ fn main() {
         .load_font_ex(&thread, "assets/regular.ttf", 200, None)
         .expect("Failed to load regular font");
     let background_img =
-        Image::load_image("assets/background.jpg").expect("Failed to load background image");
+        Image::load_image("assets/background.png").expect("Failed to load background image");
     let background_texture = rl
         .load_texture_from_image(&thread, &background_img)
         .expect("Failed to convert background image to texture");
