@@ -263,8 +263,8 @@ fn draw_tasks(
     let panel_bottom = screen_height - 28.0;
     let heading_size = 32.0_f32.min(screen_height / 24.0);
     let row_height = ((panel_bottom - panel_top - 64.0) / MAX_TASKS as f32).clamp(42.0, 68.0);
-    let title_size = (row_height * 0.60).clamp(20.0, 45.0);
-    let schedule_size = (row_height * 0.50).clamp(18.0, 45.0);
+    let title_size = (row_height * 0.60).clamp(20.0, 28.0);
+    let schedule_size = (row_height * 0.3).clamp(18.0, 24.0);
     let list_top = panel_top + 58.0;
 
     drawing.draw_rectangle_rec(
