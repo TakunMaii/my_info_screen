@@ -12,6 +12,7 @@ struct Task {
     title: String,
     scheduled: DateTime<Local>,
     recurrence: Option<Recurrence>,
+    details: String,
 }
 
 #[derive(Clone, Debug)]
@@ -203,6 +204,7 @@ fn main() {
         let time_string = now.format("%H:%M:%S").to_string();
         let date_string = now.format("%Y-%m-%d %A").to_string();
         let upcoming_tasks = task_store.upcoming(now);
+        let mouse_position = rl.get_mouse_position();
 
         let mut d = rl.begin_drawing(&thread);
         d.clear_background(Color::BLACK);
@@ -245,6 +247,7 @@ fn main() {
             screen_width,
             screen_height,
             &upcoming_tasks,
+            mouse_position,
         );
     }
 }
@@ -256,6 +259,7 @@ fn draw_tasks(
     screen_width: f32,
     screen_height: f32,
     tasks: &[(&Task, DateTime<Local>)],
+    mouse_position: Vector2,
 ) {
     let panel_width = screen_width * 0.34;
     let panel_x = 20.0;
@@ -297,8 +301,13 @@ fn draw_tasks(
         return;
     }
 
+    let mut hovered_task = None;
     for (index, (task, schedule)) in tasks.iter().enumerate() {
         let y = list_top + index as f32 * row_height;
+        let row_bounds = Rectangle::new(panel_x - 20.0, y - 8.0, panel_width + 20.0, row_height);
+        if point_in_rectangle(mouse_position, row_bounds) {
+            hovered_task = Some(index);
+        }
         let schedule_text = schedule.format("%m-%d %H:%M").to_string();
         let schedule_width = task_font.measure_text(&schedule_text, schedule_size, 0.0).x;
         let title = fit_text(
@@ -332,6 +341,105 @@ fn draw_tasks(
             );
         }
     }
+
+    if let Some(index) = hovered_task {
+        draw_task_tooltip(
+            drawing,
+            task_font,
+            &tasks[index].0.details,
+            mouse_position,
+            screen_width,
+            screen_height,
+        );
+    }
+}
+
+fn point_in_rectangle(point: Vector2, rectangle: Rectangle) -> bool {
+    point.x >= rectangle.x
+        && point.x <= rectangle.x + rectangle.width
+        && point.y >= rectangle.y
+        && point.y <= rectangle.y + rectangle.height
+}
+
+fn draw_task_tooltip(
+    drawing: &mut RaylibDrawHandle,
+    font: &Font,
+    details: &str,
+    mouse_position: Vector2,
+    screen_width: f32,
+    screen_height: f32,
+) {
+    let font_size = (screen_height / 40.0).clamp(18.0, 28.0);
+    let line_height = font_size + 8.0;
+    let padding = 18.0;
+    let tooltip_width = (screen_width * 0.42)
+        .clamp(280.0, 720.0)
+        .min(screen_width - padding * 2.0);
+    let max_lines = ((screen_height - padding * 2.0) / line_height)
+        .floor()
+        .max(1.0) as usize;
+    let mut lines = wrap_text(font, details, font_size, tooltip_width - padding * 2.0);
+    if lines.is_empty() {
+        lines.push("No additional details".to_owned());
+    }
+    if lines.len() > max_lines {
+        lines.truncate(max_lines);
+        if let Some(last_line) = lines.last_mut() {
+            last_line.push_str("...");
+        }
+    }
+
+    let tooltip_height = padding * 2.0 + lines.len() as f32 * line_height;
+    let tooltip_x = if mouse_position.x + 20.0 + tooltip_width <= screen_width - padding {
+        mouse_position.x + 20.0
+    } else {
+        mouse_position.x - tooltip_width - 20.0
+    }
+    .clamp(padding, screen_width - tooltip_width - padding);
+    let tooltip_y = (mouse_position.y - tooltip_height - 12.0)
+        .clamp(padding, screen_height - tooltip_height - padding);
+
+    drawing.draw_rectangle_rec(
+        Rectangle::new(tooltip_x, tooltip_y, tooltip_width, tooltip_height),
+        Color::new(12, 18, 22, 242),
+    );
+    drawing.draw_rectangle_lines_ex(
+        Rectangle::new(tooltip_x, tooltip_y, tooltip_width, tooltip_height),
+        1.0,
+        Color::new(190, 205, 214, 220),
+    );
+
+    for (index, line) in lines.iter().enumerate() {
+        drawing.draw_text_ex(
+            font,
+            line,
+            Vector2::new(
+                tooltip_x + padding,
+                tooltip_y + padding + index as f32 * line_height,
+            ),
+            font_size,
+            0.0,
+            Color::RAYWHITE,
+        );
+    }
+}
+
+fn wrap_text(font: &Font, text: &str, font_size: f32, max_width: f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    for source_line in text.lines() {
+        let mut line = String::new();
+        for character in source_line.chars() {
+            let candidate = format!("{line}{character}");
+            if !line.is_empty() && font.measure_text(&candidate, font_size, 0.0).x > max_width {
+                lines.push(line);
+                line = character.to_string();
+            } else {
+                line.push(character);
+            }
+        }
+        lines.push(line);
+    }
+    lines
 }
 
 fn fit_text(font: &Font, text: &str, max_width: f32, font_size: f32) -> String {
@@ -356,6 +464,14 @@ fn common_cjk_charset() -> String {
     // Include ASCII as task titles and schedule labels can contain both scripts.
     for codepoint in 0x20..=0x7e {
         charset.push(char::from_u32(codepoint).expect("valid ASCII codepoint"));
+    }
+
+    // Task details can use typographic punctuation such as an en dash.
+    for codepoint in 0xa0..=0xff {
+        charset.push(char::from_u32(codepoint).expect("valid Latin-1 codepoint"));
+    }
+    for codepoint in 0x2000..=0x206f {
+        charset.push(char::from_u32(codepoint).expect("valid punctuation codepoint"));
     }
 
     // SimHei contains the standard common Chinese character block and CJK punctuation.
@@ -428,12 +544,27 @@ fn parse_task(path: &Path) -> Option<Task> {
     let recurrence = frontmatter
         .get("recurrence")
         .and_then(|value| parse_recurrence(value, scheduled));
+    let details = parse_task_details(&content);
 
     Some(Task {
         title,
         scheduled,
         recurrence,
+        details,
     })
+}
+
+fn parse_task_details(content: &str) -> String {
+    let mut lines = content.lines();
+    if lines.next().map(str::trim) != Some("---") {
+        return String::new();
+    }
+
+    let Some(_) = lines.position(|line| line.trim() == "---") else {
+        return String::new();
+    };
+
+    lines.collect::<Vec<_>>().join("\n").trim().to_owned()
 }
 
 fn parse_frontmatter(content: &str) -> Option<std::collections::HashMap<String, String>> {
@@ -569,6 +700,12 @@ mod tests {
     }
 
     #[test]
+    fn parses_task_details_after_frontmatter() {
+        let content = "---\ntitle: Seminar\n---\n\nSpeaker: Li\nRoom: 1002\n";
+        assert_eq!(parse_task_details(content), "Speaker: Li\nRoom: 1002");
+    }
+
+    #[test]
     fn finds_next_weekly_occurrence_after_dtstart() {
         let start = parse_local_datetime("2026-09-14T15:20").unwrap();
         let recurrence = parse_recurrence(
@@ -590,5 +727,6 @@ mod tests {
         assert!(charset.contains('，'));
         assert!(charset.contains('中'));
         assert!(charset.contains('龥'));
+        assert!(charset.contains('\u{2013}'));
     }
 }
