@@ -4,6 +4,7 @@ use std::time::{Duration as StdDuration, Instant};
 
 pub(crate) struct BatteryMonitor {
     pub(crate) percentage: Option<u8>,
+    pub(crate) charging: bool,
     last_checked: Option<Instant>,
 }
 
@@ -11,6 +12,7 @@ impl BatteryMonitor {
     pub(crate) fn new() -> Self {
         Self {
             percentage: None,
+            charging: false,
             last_checked: None,
         }
     }
@@ -23,7 +25,13 @@ impl BatteryMonitor {
             return;
         }
 
-        self.percentage = read_battery_percentage();
+        if let Some((percentage, charging)) = read_battery_status() {
+            self.percentage = Some(percentage);
+            self.charging = charging;
+        } else {
+            self.percentage = None;
+            self.charging = false;
+        }
         self.last_checked = Some(now);
     }
 }
@@ -32,6 +40,7 @@ pub(crate) fn draw_battery_status(
     drawing: &mut RaylibDrawHandle,
     font: &Font,
     percentage: Option<u8>,
+    charging: bool,
     screen_width: f32,
     screen_height: f32,
 ) {
@@ -76,11 +85,22 @@ pub(crate) fn draw_battery_status(
         0.0,
         color,
     );
+    if charging {
+        drawing.draw_text_ex(
+            font,
+            "⚡",
+            Vector2::new(text_x + text_width + 8.0, text_y),
+            text_size,
+            0.0,
+            Color::new(247, 196, 75, 145),
+        );
+    }
 }
 
-fn read_battery_percentage() -> Option<u8> {
+fn read_battery_status() -> Option<(u8, bool)> {
     let entries = fs::read_dir("/sys/class/power_supply").ok()?;
     let mut capacities = Vec::new();
+    let mut charging = false;
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -98,17 +118,22 @@ fn read_battery_percentage() -> Option<u8> {
             continue;
         };
         capacities.push(capacity.min(100));
+
+        if let Ok(status) = fs::read_to_string(path.join("status")) {
+            charging |= status.trim() == "Charging";
+        }
     }
 
     if capacities.is_empty() {
         None
     } else {
-        Some(
+        Some((
             (capacities
                 .iter()
                 .map(|&capacity| u32::from(capacity))
                 .sum::<u32>()
                 / capacities.len() as u32) as u8,
-        )
+            charging,
+        ))
     }
 }

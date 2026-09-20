@@ -6,8 +6,8 @@ const DEFAULT_TIMER_SECONDS: i64 = 25 * 60;
 const TIMER_STEP_SECONDS: i64 = 5 * 60;
 const MIN_TIMER_SECONDS: i64 = 5 * 60;
 const MAX_TIMER_SECONDS: i64 = 12 * 60 * 60;
-const TIMER_PANEL_WIDTH: f32 = 420.0;
-const TIMER_PANEL_HEIGHT: f32 = 170.0;
+const TIMER_PANEL_WIDTH: f32 = 520.0;
+const TIMER_PANEL_HEIGHT: f32 = 220.0;
 const TIMER_PANEL_MARGIN: f32 = 28.0;
 
 pub(crate) struct CountdownTimer {
@@ -131,7 +131,7 @@ pub(crate) fn draw_timer_panel(
 
     drawing.draw_rectangle_rec(panel, panel_color);
 
-    let time_size = 64.0_f32.min(panel.height * 0.43);
+    let time_size = 86.0_f32.min(panel.height * 0.45);
     let time_text = timer.display_time();
     let time_width = font.measure_text(&time_text, time_size, 0.0).x;
     drawing.draw_text_ex(
@@ -150,14 +150,14 @@ pub(crate) fn draw_timer_panel(
         (TimerButton::Longer, "LONGER"),
     ] {
         let bounds = timer_button_bounds(panel, button);
-        let label_size = 22.0;
+        let label_size = 25.0;
         let label_width = font.measure_text(label, label_size, 0.0).x;
         drawing.draw_text_ex(
             font,
             label,
             Vector2::new(
                 bounds.x + (bounds.width - label_width) / 2.0,
-                bounds.y + 5.0,
+                bounds.y + 8.0,
             ),
             label_size,
             0.0,
@@ -177,12 +177,12 @@ fn timer_panel_bounds(screen_width: f32) -> Rectangle {
 
 fn timer_button_bounds(panel: Rectangle, button: TimerButton) -> Rectangle {
     let (x_offset, width) = match button {
-        TimerButton::Shorter => (16.0, 100.0),
-        TimerButton::StartPause => (124.0, 110.0),
-        TimerButton::End => (242.0, 68.0),
-        TimerButton::Longer => (318.0, 86.0),
+        TimerButton::Shorter => (20.0, 125.0),
+        TimerButton::StartPause => (155.0, 135.0),
+        TimerButton::End => (300.0, 80.0),
+        TimerButton::Longer => (390.0, 110.0),
     };
-    Rectangle::new(panel.x + x_offset, panel.y + 112.0, width, 42.0)
+    Rectangle::new(panel.x + x_offset, panel.y + 154.0, width, 50.0)
 }
 
 #[cfg(test)]

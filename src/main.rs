@@ -1,4 +1,5 @@
 mod battery;
+mod status;
 mod tasks;
 mod timer;
 mod ui;
@@ -6,9 +7,11 @@ mod ui;
 use battery::{BatteryMonitor, draw_battery_status};
 use chrono::Local;
 use raylib::{ffi::Rectangle, prelude::*};
+use status::PersonalStatusPanel;
 use std::time::Instant;
 use tasks::{TaskStore, common_cjk_charset, draw_tasks};
 use timer::{CountdownTimer, draw_timer_panel};
+use ui::regular_font_charset;
 
 const TASKS_DIR: &str = "/home/maii/Seafile/私人资料库/TaskNotes/Tasks";
 
@@ -19,8 +22,9 @@ fn main() {
     let light_font_big = rl
         .load_font_ex(&thread, "assets/light.ttf", 200, None)
         .expect("Failed to load light font");
+    let regular_charset = regular_font_charset();
     let regular_font_big = rl
-        .load_font_ex(&thread, "assets/regular.ttf", 200, None)
+        .load_font_ex(&thread, "assets/regular.ttf", 200, Some(&regular_charset))
         .expect("Failed to load regular font");
     let cjk_charset = common_cjk_charset();
     let cjk_font = rl
@@ -41,17 +45,22 @@ fn main() {
     );
     background_shader.set_shader_value(background_shader.get_shader_location("radius"), 20.0);
     background_shader.set_shader_value(background_shader.get_shader_location("noiseAmount"), 0.02);
+    let mut status_shader = rl.load_shader(&thread, None, Some("assets/shaders/status.fs"));
+    let status_time_location = status_shader.get_shader_location("time");
+    let app_started = Instant::now();
 
     let mut task_store = TaskStore::new(TASKS_DIR);
     task_store.refresh_if_changed();
-    let mut countdown_timer = CountdownTimer::new(Instant::now());
+    let mut countdown_timer = CountdownTimer::new(app_started);
     let mut battery_monitor = BatteryMonitor::new();
+    let mut personal_status = PersonalStatusPanel::new(app_started);
 
     while !rl.window_should_close() {
         task_store.refresh_if_changed();
         let frame_now = Instant::now();
         countdown_timer.update(frame_now);
         battery_monitor.refresh_if_needed(frame_now);
+        personal_status.update(frame_now);
 
         let now = Local::now();
         let time_string = now.format("%H:%M:%S").to_string();
@@ -61,6 +70,17 @@ fn main() {
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
             countdown_timer.handle_click(mouse_position, screen_width, frame_now);
         }
+        personal_status.handle_input(
+            mouse_position,
+            rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT),
+            rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT),
+            rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT),
+            screen_width,
+        );
+        status_shader.set_shader_value(
+            status_time_location,
+            frame_now.duration_since(app_started).as_secs_f32(),
+        );
 
         let mut drawing = rl.begin_drawing(&thread);
         drawing.clear_background(Color::BLACK);
@@ -112,10 +132,20 @@ fn main() {
             frame_now,
             screen_width,
         );
+        {
+            let mut status_drawing = drawing.begin_shader_mode(&mut status_shader);
+            personal_status.draw(
+                &mut status_drawing,
+                &regular_font_big,
+                screen_width,
+                screen_height,
+            );
+        }
         draw_battery_status(
             &mut drawing,
             &regular_font_big,
             battery_monitor.percentage,
+            battery_monitor.charging,
             screen_width,
             screen_height,
         );
