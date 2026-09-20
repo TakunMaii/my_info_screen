@@ -258,8 +258,8 @@ fn draw_tasks(
     tasks: &[(&Task, DateTime<Local>)],
 ) {
     let panel_width = screen_width * 0.34;
-    let panel_x = screen_width - panel_width - 30.0;
-    let panel_top = 32.0;
+    let panel_x = 20.0;
+    let panel_top = 300.0;
     let panel_bottom = screen_height - 28.0;
     let heading_size = 32.0_f32.min(screen_height / 24.0);
     let row_height = ((panel_bottom - panel_top - 64.0) / MAX_TASKS as f32).clamp(42.0, 68.0);
